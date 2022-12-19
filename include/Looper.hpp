@@ -4,25 +4,38 @@
 #include <functional>
 #include <queue>
 #include <mutex>
+#include <vector>
 class Message {
 public:
-    Message(std::function<void()> action):action_(action) {}
+    Message(std::function<void()> action, long long scheduled_time):action_(action), scheduled_time(scheduled_time) {}
     Message(const Message& msg) {
         action_ = msg.action_;
+        scheduled_time = msg.scheduled_time;
     }
     void operator()() {
         action_();
     }
+    long long get_scheduled_time() {
+        return scheduled_time;
+    }
 private:
     std::function<void()> action_;
+    long long scheduled_time = 0;
 };
+
+struct MessageComparator {
+    bool operator()(std::shared_ptr<Message> left, std::shared_ptr<Message> right) {
+        return left.get()->get_scheduled_time() > right.get()->get_scheduled_time();
+    }
+};
+
 class MessageQueue {
 private:
     std::mutex _mutex;
     std::condition_variable _cv;
-    std::queue<std::shared_ptr<Message>> queue;
+    std::priority_queue<std::shared_ptr<Message>, std::vector<std::shared_ptr<Message>>, MessageComparator> queue;
 public:
-    void push(Message message) {
+    void push(Message&& message) {
         std::shared_ptr<Message> msg(new Message(message));
         std::unique_lock<std::mutex> this_lock(_mutex);
         queue.push(msg);
@@ -31,14 +44,20 @@ public:
     }
     std::shared_ptr<Message> poll() {
         std::unique_lock<std::mutex> this_lock(_mutex);
-        while (!queue.size()) {
+        while (queue.empty()) {
             _cv.wait(this_lock);
         }
-        std::shared_ptr<Message> msg = queue.front();
+        std::shared_ptr<Message> msg = queue.top();
+        auto now = std::chrono::system_clock::now();
+        auto current = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        auto scheduled_time = msg.get()->get_scheduled_time();
+        auto time_diff = scheduled_time - current;
+        if (time_diff > 0) {
+            auto status = _cv.wait_for(this_lock, std::chrono::milliseconds(time_diff));
+        }
         queue.pop();
         return msg;
     }
-
 };
 class Looper {
 private:
@@ -51,8 +70,13 @@ public:
             (*msg.get())();
         }
     }
-    void post(Message message) {
-        queue.push(message);
+    void post(std::function<void()>&& func) {
+        postDelay(std::move(func), 0);
+    }
+    void postDelay(std::function<void()> func, long long delay) {
+        auto now = std::chrono::system_clock::now();
+        auto scheduled_time = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        queue.push(Message(func, scheduled_time + delay));
     }
     static Looper& getMainLooper() {
         static Looper looper;

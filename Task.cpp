@@ -79,6 +79,27 @@ private:
     BaseDispatcher* dispatcher_ = nullptr;
 };
 
+// SleepAwaiter
+class SleepAwaiter {
+public:
+    SleepAwaiter(long long delay, BaseDispatcher* dispatcher): dispatcher_(dispatcher), delay_(delay){};
+    bool await_ready() {
+        return false;
+    }
+    void await_suspend(std::coroutine_handle<> handle){
+        scheduler.post([handle, this]() {
+            dispatcher_->execute([handle](){
+                handle.resume();
+            });
+        }, delay_);
+    }
+    void await_resume() {}
+private:
+    BaseDispatcher* dispatcher_ = nullptr;
+    long long delay_ = 0;
+    LooperScheduler scheduler;
+};
+
 template<typename R, typename DISPATCHER>
 requires std::derived_from<DISPATCHER, BaseDispatcher>
 class Task {
@@ -104,10 +125,15 @@ public:
             conv.notify_all();
             notify_callbacks();
         }
-
         template<typename __R, typename __DISPATCHER>
         TaskAwaiter<__R, __DISPATCHER> await_transform(Task<__R, __DISPATCHER>&& task) {
             return TaskAwaiter<__R, __DISPATCHER>(std::move(task), &dispatcher);
+        }
+
+        template<typename Rep, typename RADIO>
+        SleepAwaiter await_transform(std::chrono::duration<Rep, RADIO>&& duration) {
+            auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+            return SleepAwaiter(delay, &dispatcher);
         }
 
         Task<R, DISPATCHER> get_return_object() {
@@ -149,11 +175,12 @@ public:
 
     Task(std::coroutine_handle<promise_type> handle): _handle(handle) {};
 
+    // sync
     R execute() {
         return _handle.promise().get_result();
     }
 
-
+    // async
     void enqueue(std::function<void(R)> func) {
         _handle.promise().on_completed([func](Result<R> result) {
             func(result.get_or_throw());
