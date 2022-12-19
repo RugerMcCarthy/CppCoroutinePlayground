@@ -3,4 +3,4 @@ project(coroutine_playground)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(coroutine_playground Generate.cpp)
+add_executable(coroutine_playground main.cpp)

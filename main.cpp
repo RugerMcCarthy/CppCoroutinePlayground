@@ -16,7 +16,6 @@ Task<int, MainLooperDispatcher> simple_task2() {
     // sleep 1 秒
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(1s);
-
     co_return 2;
 }
 
@@ -37,18 +36,14 @@ Task<int, AsyncDispatcher> simple_task() {
     co_return 1 + result2 + result3;
 }
 
-void test() {
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(2s);
-    std::cout << "test" << std::endl;
-}
+
 int main() {
-    Looper& looper = Looper::getMainLooper();
-    debug("This is Main Thread!")
-    auto task = simple_task();
-    task.enqueue([](int result) {
-        std::cout << "Get Result: " << result << std::endl;
-    });
-    debug("End!")
-    looper.loop();
+//    Looper& looper = Looper::getMainLooper();
+//    debug("This is Main Thread!")
+//    auto task = simple_task();
+//    task.enqueue([](int result) {
+//        std::cout << "Get Result: " << result << std::endl;
+//    });
+//    debug("End!")
+//    looper.loop();
 }

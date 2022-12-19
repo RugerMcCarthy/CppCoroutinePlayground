@@ -6,6 +6,7 @@
 #include <optional>
 #include <mutex>
 #include <list>
+#include <concepts>
 #include "include/Dispatcher.hpp"
 #ifndef TASK
 #define TASK
@@ -31,6 +32,7 @@ private:
 };
 
 template<typename R, typename DISPATCHER>
+requires std::derived_from<DISPATCHER, BaseDispatcher>
 class Task;
 // TaskAwaiter
 template<typename R, typename DISPATCHER>
@@ -78,6 +80,7 @@ private:
 };
 
 template<typename R, typename DISPATCHER>
+requires std::derived_from<DISPATCHER, BaseDispatcher>
 class Task {
 public:
     struct promise_type {
